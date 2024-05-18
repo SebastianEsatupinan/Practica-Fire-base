@@ -1,3 +1,4 @@
+// src/core/service/firebase/db/users.js
 import {
   addDoc,
   doc,
@@ -71,6 +72,7 @@ async function addUser(name, lastName) {
 
     return docRef.id;
   } catch (e) {
+    console.error("Error adding document: ", e);
     return null;
   }
 }
