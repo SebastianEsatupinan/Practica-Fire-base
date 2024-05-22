@@ -3,14 +3,12 @@ import "./App.css";
 import {
   readUsers,
   addUser,
-  readUserById,
-  customDoc,
-  customCollection,
   deleteById,
+  updateUser,
 } from "./core/service/firebase/db/users";
 import { listenFeaturesFlags } from "./core/service/firebase/db/config";
-import { signIn, signUp } from "./core/service/firebase/auth";
-import { getImageUrlByName } from "./core/service/firebase/storage";
+import { signIn, signUp, deleteUserAccount, updateUserEmail } from "./core/service/firebase/auth";
+import { uploadImage, listImages } from "./core/service/firebase/storage"; // Importar las funciones necesarias
 
 import Button from "@mui/material/Button";
 import Box from "@mui/material/Box";
@@ -46,8 +44,18 @@ const CssTextField = styled(TextField)({
 function App() {
   const [name, setName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [authUsers, setAuthUsers] = useState([]);
   const [users, setUsers] = useState([]);
   const [deleteUserFeatureFlag, setDeleteUserFeatureFlag] = useState(true);
+  const [editUserId, setEditUserId] = useState(null);
+  const [editAuthUserId, setEditAuthUserId] = useState(null);
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginMessage, setLoginMessage] = useState("");
+  const [imageFile, setImageFile] = useState(null);
+  const [imageUrls, setImageUrls] = useState([]);
   let unsubscribe;
 
   useEffect(() => {
@@ -61,139 +69,240 @@ function App() {
     };
   }, []);
 
-  let getUsersCallBack = async () => {
+  const getUsersCallBack = async () => {
     let response = await readUsers();
     setUsers(response);
   };
 
+  const handleEdit = (user) => {
+    setName(user.name);
+    setLastName(user.lastName);
+    setEditUserId(user.id);
+  };
+
+  const handleAuthEdit = (user) => {
+    setEmail(user.email);
+    setEditAuthUserId(user.id);
+  };
+
+  const handleSave = async () => {
+    if (editUserId) {
+      await updateUser(editUserId, name, lastName);
+    } else {
+      await addUser(name, lastName);
+    }
+    let response = await readUsers();
+    setUsers(response);
+    setName("");
+    setLastName("");
+    setEditUserId(null);
+  };
+
+  const handleAuthSave = async () => {
+    try {
+      if (editAuthUserId) {
+        const user = authUsers.find(u => u.id === editAuthUserId);
+        if (user) {
+          await updateUserEmail(user, email);
+          setAuthUsers(authUsers.map(u => (u.id === editAuthUserId ? { ...u, email } : u)));
+        }
+      } else {
+        const user = await signUp(email, password);
+        setAuthUsers([...authUsers, { id: user.uid, email: user.email }]);
+      }
+      setEmail("");
+      setPassword("");
+      setEditAuthUserId(null);
+    } catch (error) {
+      console.error("Error creando usuario:", error.message);
+    }
+  };
+
+  const handleLogin = async () => {
+    try {
+      await signIn(loginEmail, loginPassword);
+      setLoginMessage("Felicitaciones, estás registrado!");
+    } catch (error) {
+      setLoginMessage("No estás registrado.");
+    }
+  };
+
+  const handleImageUpload = async (event) => {
+    event.preventDefault();
+    if (imageFile) {
+      try {
+        const url = await uploadImage(imageFile);
+        alert("Imagen subida correctamente");
+        setImageFile(null);
+      } catch (error) {
+        console.error("Error subiendo la imagen:", error);
+        alert("Error subiendo la imagen");
+      }
+    }
+  };
+
+  const handleImageChange = (event) => {
+    setImageFile(event.target.files[0]);
+  };
+
+  const handleListImages = async () => {
+    try {
+      const urls = await listImages();
+      setImageUrls(urls);
+    } catch (error) {
+      console.error("Error obteniendo las imágenes:", error);
+    }
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column" }}>
-      <>
-        {users.length == 0 && <h1>No hay datos</h1>}
+      {/* Gestión de Usuarios */}
+      <div className="section">
+        <h2 className="section-title">Gestión de Usuarios</h2>
+        {users.length === 0 && <h1>No hay datos</h1>}
         {users.length > 0 &&
           users.map((user) => {
             let { name, lastName, id } = { ...user };
             return (
-              <Card key={id} sx={{ minWidth: 275 }}>
+              <Card key={id} sx={{ minWidth: 275, marginBottom: '1rem' }}>
                 <CardContent>
-                  <Typography variant="h5" component="div">
-                    Name
+                  <Typography variant="h6" component="div">
+                    Nombre
                   </Typography>
-                  <Typography sx={{ mb: 1.5 }} color="text.secondary">
+                  <Typography variant="h5" sx={{ mb: 1.5 }} color="text.secondary">
                     {name}
                   </Typography>
-                  <Typography variant="h5" component="div">
-                    Last Name
+                  <Typography variant="h6" component="div">
+                    Apellido
                   </Typography>
-                  <Typography sx={{ mb: 1.5 }} color="text.secondary">
+                  <Typography variant="h5" sx={{ mb: 1.5 }} color="text.secondary">
                     {lastName}
                   </Typography>
                 </CardContent>
                 <CardActions>
-                  {deleteUserFeatureFlag && (
-                    <Button
-                      onClick={async () => {
-                        await deleteById(id);
-                        let response = await readUsers();
-                        await setUsers(response);
-                      }}
-                      size="small"
-                    >
-                      Eliminar
-                    </Button>
-                  )}
-                  <Button size="small">Editar</Button>
+                  <Button
+                    onClick={async () => {
+                      await deleteById(id);
+                      let response = await readUsers();
+                      setUsers(response);
+                    }}
+                    size="small"
+                  >
+                    Eliminar
+                  </Button>
+                  <Button size="small" onClick={() => handleEdit(user)}>
+                    Editar
+                  </Button>
                 </CardActions>
               </Card>
             );
           })}
-      </>
-      <Box sx={{ mb: 2 }} />
-
-      <div style={{ display: "flex", flexDirection: "row" }}>
-        <CssTextField
-          InputLabelProps={{
-            sx: {
-              color: "white",
-              [`&.${inputLabelClasses.shrink}`]: {
+        <Box sx={{ mb: 2 }} />
+        <div style={{ display: "flex", flexDirection: "row" }}>
+          <CssTextField
+            InputLabelProps={{
+              sx: {
                 color: "white",
+                [`&.${inputLabelClasses.shrink}`]: {
+                  color: "white",
+                },
               },
-            },
-          }}
-          label="name"
-          id="name"
-          value={name}
-          onChange={(event) => {
-            setName(event.target.value);
-          }}
-        />
-        <Box sx={{ mr: 2 }} />
-        <CssTextField
-          InputLabelProps={{
-            sx: {
-              color: "white",
-              [`&.${inputLabelClasses.shrink}`]: {
+            }}
+            label="Nombre"
+            id="name"
+            value={name}
+            onChange={(event) => {
+              setName(event.target.value);
+            }}
+          />
+          <Box sx={{ mr: 2 }} />
+          <CssTextField
+            InputLabelProps={{
+              sx: {
                 color: "white",
+                [`&.${inputLabelClasses.shrink}`]: {
+                  color: "white",
+                },
               },
-            },
-          }}
-          label="name"
-          id="name"
-          value={lastName}
-          onChange={(event) => {
-            setLastName(event.target.value);
-          }}
-        />
+            }}
+            label="Apellido"
+            id="lastName"
+            value={lastName}
+            onChange={(event) => {
+              setLastName(event.target.value);
+            }}
+          />
+        </div>
+        <Box sx={{ mb: 2 }} />
+        <Button onClick={handleSave} variant="contained">
+          {editUserId ? "Guardar" : "Agregar"}
+        </Button>
       </div>
-      <Box sx={{ mb: 2 }} />
-      <Button
-        onClick={async () => {
-          await addUser(name, lastName);
-          let response = await readUsers();
-          await setUsers(response);
-          setLastName("");
-          setUsers("");
-        }}
-        variant="contained"
-      >
-        Agregar
-      </Button>
-      <Box sx={{ mb: 2 }} />
-      <Button
-        onClick={async () => {
-          let response = await signUp(
-            "ricardoandb@gmail.com",
-            "siyofueraladronmerobariatusbesos"
-          );
-          console.log("response", response);
-        }}
-        variant="contained"
-      >
-        Create User Auth
-      </Button>
-      <Box sx={{ mb: 2 }} />
-      <Button
-        onClick={async () => {
-          let response = await signIn(
-            "ricardoandb@gmail.com",
-            "siyofueraladronmerobariatusbesos"
-          );
-          console.log("response", response);
-        }}
-        variant="contained"
-      >
-        Login User Auth
-      </Button>
-      <Box sx={{ mb: 2 }} />
-      <Button
-        onClick={async () => {
-          let response = await getImageUrlByName("one_way.png");
-          window.open(response);
-        }}
-        variant="contained"
-      >
-        Get Image
-      </Button>
+
+      {/* Gestión de Autenticación */}
+      <div className="section">
+        <h2 className="section-title">Gestión de Autenticación</h2>
+        <Box sx={{ mb: 2 }} />
+        <div style={{ display: "flex", flexDirection: "row" }}>
+          <CssTextField
+            InputLabelProps={{
+              sx: {
+                color: "white",
+                [`&.${inputLabelClasses.shrink}`]: {
+                  color: "white",
+                },
+              },
+            }}
+            label="Email"
+            id="email"
+            value={email}
+            onChange={(event) => {
+              setEmail(event.target.value);
+            }}
+          />
+          <Box sx={{ mr: 2 }} />
+          <CssTextField
+            InputLabelProps={{
+              sx: {
+                color: "white",
+                [`&.${inputLabelClasses.shrink}`]: {
+                  color: "white",
+                },
+              },
+            }}
+            label="Contraseña"
+            id="password"
+            type="password"
+            value={password}
+            onChange={(event) => {
+              setPassword(event.target.value);
+            }}
+          />
+        </div>
+        <Box sx={{ mb: 2 }} />
+        <Button onClick={handleAuthSave} variant="contained">
+          {editAuthUserId ? "Guardar" : "Crear Usuario"}
+        </Button>
+      </div>
+
+      {/* Gestión de Imágenes */}
+      <div className="section">
+        <h2 className="section-title">Gestión de Imágenes</h2>
+        <form onSubmit={handleImageUpload}>
+          <input type="file" onChange={handleImageChange} />
+          <Button type="submit" variant="contained">
+            Subir Imagen
+          </Button>
+        </form>
+        <Button onClick={handleListImages} variant="contained" sx={{ mt: 2 }}>
+          Traer Imágenes
+        </Button>
+        <div style={{ display: "flex", flexDirection: "column", marginTop: "1rem" }}>
+          {imageUrls.map((url, index) => (
+            <img key={index} src={url} alt={`uploaded-${index}`} style={{ maxWidth: "100%", marginBottom: "1rem" }} />
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

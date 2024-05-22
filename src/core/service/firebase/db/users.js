@@ -1,4 +1,3 @@
-// src/core/service/firebase/db/users.js
 import {
   addDoc,
   doc,
@@ -12,7 +11,10 @@ import { fireStoreDB } from "../firebase";
 
 async function readUsers() {
   const querySnapshot = await getDocs(collection(fireStoreDB, "users"));
-  let response = querySnapshot.docs.map((doc) => doc.data());
+  let response = querySnapshot.docs.map((doc) => ({
+    id: doc.id,
+    ...doc.data(),
+  }));
   return response;
 }
 
@@ -25,7 +27,7 @@ async function customDoc() {
     "document"
   );
   const querySnapshot = await getDoc(docRef);
-  if (querySnapshot.exists) return querySnapshot.data();
+  if (querySnapshot.exists()) return querySnapshot.data();
   return null;
 }
 
@@ -77,6 +79,18 @@ async function addUser(name, lastName) {
   }
 }
 
+async function updateUser(id, name, lastName) {
+  try {
+    const docRef = doc(fireStoreDB, "users", id);
+    await updateDoc(docRef, {
+      name: name,
+      lastName: lastName,
+    });
+  } catch (e) {
+    console.error("Error updating document: ", e);
+  }
+}
+
 export {
   readUsers,
   addUser,
@@ -84,4 +98,5 @@ export {
   customDoc,
   customCollection,
   deleteById,
+  updateUser,
 };
