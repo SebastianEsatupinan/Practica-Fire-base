@@ -8,7 +8,7 @@ import {
 } from "./core/service/firebase/db/users";
 import { listenFeaturesFlags } from "./core/service/firebase/db/config";
 import { signIn, signUp, deleteUserAccount, updateUserEmail } from "./core/service/firebase/auth";
-import { uploadImage, listImages } from "./core/service/firebase/storage"; // Importar las funciones necesarias
+import { uploadImage, listImages } from "./core/service/firebase/storage";
 
 import Button from "@mui/material/Button";
 import Box from "@mui/material/Box";
